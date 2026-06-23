@@ -4,7 +4,10 @@
 // Fallback (ts-node requires ESM flag and may need tsconfig override):
 //   npx ts-node --esm scripts/testGraph.ts
 
-import { runResearchGraph, type ResearchUpdate } from "../lib/graph/researchGraph";
+import {
+  runResearchGraph,
+  type ResearchUpdate,
+} from "../lib/graph/researchGraph";
 
 async function main(): Promise<void> {
   console.log("▶  Starting research pipeline for: Apple\n");
@@ -12,7 +15,10 @@ async function main(): Promise<void> {
   for await (const update of runResearchGraph("Apple")) {
     // Pretty-print so step/status stand out, data is collapsed.
     const { data, ...rest } = update as ResearchUpdate & { data?: unknown };
-    console.log(JSON.stringify(rest), data !== undefined ? `→ data: ${JSON.stringify(data)}` : "");
+    console.log(
+      JSON.stringify(rest),
+      data !== undefined ? `→ data: ${JSON.stringify(data)}` : "",
+    );
   }
 
   console.log("\n✅  Pipeline complete.");
