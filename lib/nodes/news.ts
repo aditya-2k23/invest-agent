@@ -21,6 +21,7 @@ export interface NewsArticle {
 export interface NewsData {
   generalNews: NewsArticle[];
   financialNews: NewsArticle[];
+  competitiveNews: NewsArticle[];
   queriesUsed: string[];
 }
 
@@ -61,13 +62,15 @@ function toNewsArticle(result: TavilySearchResult): NewsArticle {
 export async function fetchNews(profile: CompanyProfile): Promise<NewsData> {
   const query1 = `${profile.companyName} latest news`;
   const query2 = `${profile.companyName} earnings revenue financial results 2024 2025`;
+  const query3 = `${profile.companyName} competitors market share industry position`;
 
-  // Fire both searches in parallel to halve the wall-clock latency.
-  let generalResult, financialResult;
+  // Fire all three searches in parallel — wall-clock time equals the slowest query.
+  let generalResult, financialResult, competitiveResult;
   try {
-    [generalResult, financialResult] = await Promise.all([
+    [generalResult, financialResult, competitiveResult] = await Promise.all([
       client.search(query1, { maxResults: 6, searchDepth: "basic" }),
       client.search(query2, { maxResults: 6, searchDepth: "advanced" }),
+      client.search(query3, { maxResults: 5, searchDepth: "basic" }),
     ]);
   } catch (err) {
     throw new Error(
@@ -77,17 +80,22 @@ export async function fetchNews(profile: CompanyProfile): Promise<NewsData> {
 
   const generalArticles = generalResult.results.map(toNewsArticle);
   const financialArticles = financialResult.results.map(toNewsArticle);
+  const competitiveArticles = competitiveResult.results.map(toNewsArticle);
 
-  // Deduplicate: build a Set of URLs that already appear in generalNews,
-  // then filter them out of financialNews so the same article isn't shown twice.
+  // Deduplicate financial and competitive against the general URL set so the same
+  // article never appears in more than one bucket.
   const generalUrls = new Set(generalArticles.map((a) => a.url));
   const dedupedFinancial = financialArticles.filter(
+    (a) => !generalUrls.has(a.url),
+  );
+  const dedupedCompetitive = competitiveArticles.filter(
     (a) => !generalUrls.has(a.url),
   );
 
   return {
     generalNews: generalArticles,
     financialNews: dedupedFinancial,
-    queriesUsed: [query1, query2],
+    competitiveNews: dedupedCompetitive,
+    queriesUsed: [query1, query2, query3],
   };
 }
