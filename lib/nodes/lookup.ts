@@ -3,7 +3,6 @@
 
 // v3 changed the API: the default export is a class, not a singleton instance.
 import YahooFinance from "yahoo-finance2";
-import type { SearchQuoteYahooEquity } from "yahoo-finance2/esm/src/modules/search.js";
 
 // Module-level instance — created once, reused across calls.
 // suppressNotices silences the one-time survey prompt that clutters logs.
@@ -29,10 +28,9 @@ export async function lookupCompany(query: string): Promise<CompanyProfile> {
   }
 
   // The quotes array is a union of many instrument types; we only want equities.
-  // typeDisp === "Equity" is the stable string discriminant; quoteType === "EQUITY"
-  // is the enum value — both are checked here for robustness.
+  // quoteType === "EQUITY" is the stable enum discriminant for stock listings.
   const equity = searchResult.quotes.find(
-    (q): q is SearchQuoteYahooEquity =>
+    (q): q is typeof q & { quoteType: "EQUITY"; symbol: string; exchange: string; longname?: string; shortname?: string } =>
       "quoteType" in q && q.quoteType === "EQUITY",
   );
 
