@@ -8,6 +8,7 @@
 import { lookupCompany } from "../nodes/lookup";
 import { fetchFinancials } from "../nodes/financials";
 import { fetchNews } from "../nodes/news";
+import { synthesizeVerdict } from "../nodes/synthesis";
 
 // Types
 /** Discriminated union over every event shape the stream can emit. */
@@ -57,16 +58,10 @@ export async function* runResearchGraph(
       data: { articles: news.competitiveNews },
     };
 
-    // Step 5 — synthesis placeholder until the LLM node is wired in
+    // Step 5 — LLM synthesis: produce a structured invest/pass verdict
     yield { step: "synthesis", status: "running" };
-    yield {
-      step: "synthesis",
-      status: "done",
-      data: {
-        verdict: "PENDING",
-        note: "LLM synthesis node not yet implemented",
-      },
-    };
+    const verdict = await synthesizeVerdict({ profile, financials, news });
+    yield { step: "synthesis", status: "done", data: verdict };
 
     yield { step: "done", status: "complete" };
   } catch (err) {
