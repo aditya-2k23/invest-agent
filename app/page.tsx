@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import type { Verdict } from "../lib/nodes/synthesis";
 
 // Types
 type StepStatus = "idle" | "running" | "done" | "error";
@@ -45,6 +46,24 @@ const INITIAL_PIPELINE: PipelineState = {
   synthesis: { status: "idle" },
 };
 
+// Safe cast — returns null if data doesn't match the Verdict shape
+function asVerdict(data: unknown): Verdict | null {
+  if (
+    data !== null &&
+    typeof data === "object" &&
+    "verdict" in data &&
+    "confidence" in data &&
+    "summary" in data &&
+    "bullCase" in data &&
+    "bearCase" in data &&
+    "riskLevel" in data &&
+    "keyMetrics" in data
+  ) {
+    return data as Verdict;
+  }
+  return null;
+}
+
 // Sub-components
 function StepCard({
   label,
@@ -65,22 +84,22 @@ function StepCard({
     <div
       className={`relative flex items-center gap-4 rounded-xl border px-5 py-4 transition-all duration-500 ${
         isRunning
-          ? "border-amber-500/40 bg-amber-500/5 shadow-lg shadow-amber-500/10"
+          ? "border-amber-400/60 bg-amber-50 shadow-lg shadow-amber-100"
           : isDone
-            ? "border-emerald-500/30 bg-emerald-500/5"
+            ? "border-emerald-400/50 bg-emerald-50"
             : isIdle
-              ? "border-white/5 bg-white/3"
-              : "border-red-500/30 bg-red-500/5"
+              ? "border-slate-200 bg-white"
+              : "border-red-400/50 bg-red-50"
       }`}
     >
       {/* Step number badge */}
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors duration-500 ${
           isRunning
-            ? "bg-amber-500 text-black"
+            ? "bg-amber-400 text-white"
             : isDone
-              ? "bg-emerald-500 text-black"
-              : "bg-white/8 text-white/30"
+              ? "bg-emerald-500 text-white"
+              : "bg-slate-100 text-slate-400"
         }`}
       >
         {isDone ? "✓" : index + 1}
@@ -92,10 +111,10 @@ function StepCard({
         <span
           className={`text-sm font-medium transition-colors duration-300 ${
             isRunning
-              ? "text-white"
+              ? "text-slate-800"
               : isDone
-                ? "text-white/90"
-                : "text-white/35"
+                ? "text-slate-700"
+                : "text-slate-400"
           }`}
         >
           {label}
@@ -118,10 +137,10 @@ function StepCard({
         <span
           className={`text-xs font-semibold tracking-wide ${
             isRunning
-              ? "text-amber-400"
+              ? "text-amber-500"
               : isDone
-                ? "text-emerald-400"
-                : "text-white/20"
+                ? "text-emerald-600"
+                : "text-slate-300"
           }`}
         >
           {isIdle
@@ -132,6 +151,125 @@ function StepCard({
                 ? "DONE"
                 : "ERROR"}
         </span>
+      </div>
+    </div>
+  );
+}
+
+// Verdict results card — rendered once synthesis is done
+function VerdictCard({ verdict }: { verdict: Verdict }) {
+  const confidenceColor =
+    verdict.confidence >= 70
+      ? "bg-emerald-400"
+      : verdict.confidence >= 40
+        ? "bg-amber-400"
+        : "bg-red-400";
+
+  const riskStyles: Record<string, string> = {
+    LOW: "bg-emerald-50 text-emerald-700 border-emerald-300",
+    MEDIUM: "bg-amber-50 text-amber-700 border-amber-300",
+    HIGH: "bg-red-50 text-red-700 border-red-300",
+  };
+
+  const sentimentColor = (s: "positive" | "neutral" | "negative") =>
+    s === "positive"
+      ? "text-emerald-600"
+      : s === "negative"
+        ? "text-red-500"
+        : "text-slate-600";
+
+  return (
+    <div className="space-y-3">
+      {/* 1. Summary card */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
+        <p className="text-sm text-slate-600 leading-relaxed">
+          {verdict.summary}
+        </p>
+      </div>
+
+      {/* 2. Confidence + risk row */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Confidence */}
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs text-slate-400">Confidence</p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-800">
+            {verdict.confidence}%
+          </p>
+          <div className="mt-2 h-0.5 w-full rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${confidenceColor}`}
+              style={{ width: `${verdict.confidence}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Risk level */}
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs text-slate-400">Risk</p>
+          <div className="mt-1.5">
+            <span
+              className={`rounded-full border px-3 py-0.5 text-xs font-semibold ${riskStyles[verdict.riskLevel] ?? riskStyles["MEDIUM"]}`}
+            >
+              {verdict.riskLevel}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Bull / Bear two-column grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Bull case */}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+            ▲ Bull Case
+          </p>
+          <ul className="mt-2 space-y-2">
+            {verdict.bullCase.map((point, i) => (
+              <li
+                key={i}
+                className="flex items-start text-xs text-slate-600 leading-relaxed"
+              >
+                <span className="mr-2 mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Bear case */}
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-500">
+            ▼ Bear Case
+          </p>
+          <ul className="mt-2 space-y-2">
+            {verdict.bearCase.map((point, i) => (
+              <li
+                key={i}
+                className="flex items-start text-xs text-slate-600 leading-relaxed"
+              >
+                <span className="mr-2 mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* 4. Key metrics grid */}
+      <div className="grid grid-cols-3 gap-2">
+        {verdict.keyMetrics.map((metric, i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+          >
+            <p className="text-xs text-slate-400 truncate">{metric.label}</p>
+            <p
+              className={`mt-0.5 text-sm font-semibold ${sentimentColor(metric.sentiment)}`}
+            >
+              {metric.value}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -260,6 +398,8 @@ export default function Home() {
       ? String((synthesisData as Record<string, unknown>).verdict)
       : null;
 
+  const verdict = asVerdict(synthesisData);
+
   const doneCount = PIPELINE_STEPS.filter(
     (s) => pipeline[s.key].status === "done",
   ).length;
@@ -268,33 +408,30 @@ export default function Home() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-[#0d0d0f] text-white font-sans">
-      {/* ── Ambient glow blobs ── */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 h-[500px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-600/10 blur-[120px]" />
-        <div className="absolute top-1/3 right-0 h-[400px] w-[400px] rounded-full bg-purple-700/8 blur-[100px]" />
-      </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      {/* ── Subtle top gradient accent ── */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-indigo-400/40 to-transparent" />
 
       {/* ── Header ── */}
-      <header className="relative z-10 border-b border-white/6 bg-white/2 backdrop-blur-sm">
+      <header className="relative z-10 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20 text-lg">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-lg">
               📈
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-white">
+              <h1 className="text-sm font-semibold text-slate-800">
                 Investment Research Agent
               </h1>
-              <p className="text-xs text-white/35">
+              <p className="text-xs text-slate-400">
                 Powered by Groq · Tavily · Yahoo Finance
               </p>
             </div>
           </div>
           {hasStarted && (
-            <div className="flex items-center gap-2 text-xs text-white/40">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
               <span
-                className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? "bg-amber-400 animate-pulse" : isDone ? "bg-emerald-400" : "bg-white/20"}`}
+                className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? "bg-amber-400 animate-pulse" : isDone ? "bg-emerald-500" : "bg-slate-300"}`}
               />
               {isRunning ? "Analysing…" : isDone ? "Complete" : "Idle"}
             </div>
@@ -306,10 +443,10 @@ export default function Home() {
         {/* ── Search section ── */}
         <section aria-label="Company search">
           <div className="mb-6 text-center">
-            <h2 className="text-2xl font-bold tracking-tight text-white">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Research any public company
             </h2>
-            <p className="mt-1.5 text-sm text-white/40">
+            <p className="mt-1.5 text-sm text-slate-500">
               Enter a company name — our agent will fetch live financials, news,
               and competitive data.
             </p>
@@ -326,13 +463,13 @@ export default function Home() {
               }}
               placeholder="Apple, Reliance Industries, TSMC, Tesla…"
               disabled={isRunning}
-              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/25 outline-none transition-all focus:border-indigo-500/50 focus:bg-white/8 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none shadow-sm transition-all focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
             />
             <button
               id="research-button"
               onClick={() => void startResearch()}
               disabled={isRunning || !company.trim()}
-              className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-40 active:scale-95"
+              className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition-all hover:bg-indigo-500 hover:shadow-indigo-300 disabled:cursor-not-allowed disabled:opacity-40 active:scale-95"
             >
               {isRunning ? "Running…" : "Research →"}
             </button>
@@ -344,14 +481,14 @@ export default function Home() {
           <section aria-label="Pipeline progress">
             {/* Progress bar */}
             <div className="mb-4 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-widest text-white/30">
+              <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
                 Pipeline
               </span>
-              <span className="text-xs text-white/30">{progress}%</span>
+              <span className="text-xs text-slate-400">{progress}%</span>
             </div>
-            <div className="mb-4 h-0.5 w-full overflow-hidden rounded-full bg-white/5">
+            <div className="mb-4 h-0.5 w-full overflow-hidden rounded-full bg-slate-200">
               <div
-                className="h-full rounded-full bg-linear-to-r from-indigo-500 to-emerald-400 transition-all duration-700"
+                className="h-full rounded-full bg-linear-to-r from-indigo-500 to-emerald-500 transition-all duration-700"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -374,7 +511,7 @@ export default function Home() {
         {errorMessage && (
           <div
             role="alert"
-            className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-400"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
           >
             <span className="font-semibold">Error: </span>
             {errorMessage}
@@ -384,7 +521,7 @@ export default function Home() {
         {/* ── Results section ── */}
         {isDone && pipeline.synthesis.status === "done" && (
           <section aria-label="Research results" className="space-y-4">
-            <span className="text-xs font-semibold uppercase tracking-widest text-white/30">
+            <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
               Result
             </span>
 
@@ -393,10 +530,10 @@ export default function Home() {
               <div
                 className={`flex items-center gap-3 rounded-xl border p-5 ${
                   synthesisVerdict === "INVEST"
-                    ? "border-emerald-500/25 bg-emerald-500/8"
+                    ? "border-emerald-200 bg-emerald-50"
                     : synthesisVerdict === "PENDING"
-                      ? "border-indigo-500/25 bg-indigo-500/8"
-                      : "border-red-500/25 bg-red-500/8"
+                      ? "border-indigo-200 bg-indigo-50"
+                      : "border-red-200 bg-red-50"
                 }`}
               >
                 <span className="text-3xl">
@@ -408,11 +545,11 @@ export default function Home() {
                 </span>
                 <div>
                   <p
-                    className={`text-xl font-bold ${synthesisVerdict === "INVEST" ? "text-emerald-400" : synthesisVerdict === "PENDING" ? "text-indigo-400" : "text-red-400"}`}
+                    className={`text-xl font-bold ${synthesisVerdict === "INVEST" ? "text-emerald-600" : synthesisVerdict === "PENDING" ? "text-indigo-600" : "text-red-500"}`}
                   >
                     {synthesisVerdict}
                   </p>
-                  <p className="text-xs text-white/35 mt-0.5">
+                  <p className="text-xs text-slate-400 mt-0.5">
                     {synthesisVerdict === "PENDING"
                       ? "LLM synthesis will produce a full verdict in the next session."
                       : "AI-generated investment recommendation"}
@@ -421,20 +558,25 @@ export default function Home() {
               </div>
             )}
 
-            {/* Raw synthesis payload */}
-            <div className="rounded-xl border border-white/6 bg-white/3">
-              <div className="flex items-center justify-between border-b border-white/5 px-4 py-2.5">
-                <span className="text-xs font-medium text-white/30">
-                  Synthesis payload
-                </span>
-                <span className="rounded bg-white/5 px-2 py-0.5 text-xs text-white/20">
-                  JSON
-                </span>
+            {/* Structured verdict card — replaces raw JSON dump */}
+            {verdict ? (
+              <VerdictCard verdict={verdict} />
+            ) : (
+              /* Safety-net fallback: show raw JSON if verdict shape is unexpected */
+              <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+                  <span className="text-xs font-medium text-slate-400">
+                    Synthesis payload
+                  </span>
+                  <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-400">
+                    JSON
+                  </span>
+                </div>
+                <pre className="overflow-x-auto p-4 text-xs leading-relaxed text-slate-500">
+                  {JSON.stringify(pipeline.synthesis.data, null, 2)}
+                </pre>
               </div>
-              <pre className="overflow-x-auto p-4 text-xs leading-relaxed text-white/50">
-                {JSON.stringify(pipeline.synthesis.data, null, 2)}
-              </pre>
-            </div>
+            )}
           </section>
         )}
 
@@ -447,7 +589,7 @@ export default function Home() {
                 onClick={() => {
                   setCompany(name);
                 }}
-                className="rounded-xl border border-white/6 bg-white/3 px-3 py-2.5 text-xs text-white/40 transition-all hover:border-indigo-500/30 hover:bg-indigo-500/8 hover:text-white/70"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500 shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600"
               >
                 {name}
               </button>

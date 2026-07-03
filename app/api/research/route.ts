@@ -9,6 +9,10 @@ import {
   type ResearchUpdate,
 } from "@/lib/graph/researchGraph";
 
+// Tell Vercel to allow up to 60 seconds for this route.
+// The pipeline (Tavily × 3 + Groq) can take 30-50 s end-to-end.
+export const maxDuration = 60;
+
 // Validation schema
 const requestSchema = z.object({
   // Trim before length-checking so "  " is caught as empty.
